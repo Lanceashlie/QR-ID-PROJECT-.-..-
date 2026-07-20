@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>San Lorenzo Ruiz Attendance</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        /* Cyber Theme */
+        body { background-color: #0a0e14; color: #00ffcc; font-family: 'Segoe UI', sans-serif; text-align: center; padding: 10px; }
+        h2, h3 { color: #fff; text-transform: uppercase; letter-spacing: 2px; }
+        #reader { width: 100%; max-width: 400px; margin: auto; border: 2px solid #00ffcc; border-radius: 15px; overflow: hidden; }
+        #stats { margin: 15px 0; font-size: 1.2rem; font-weight: bold; }
+        table { width: 100%; margin: 10px auto; border-collapse: collapse; background: rgba(255, 255, 255, 0.05); color: #fff; border-radius: 10px; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: center; }
+        th { background: #1a222e; color: #00ffcc; }
+        
+        button { background: transparent; color: #00ffcc; border: 1px solid #00ffcc; padding: 10px; margin: 5px; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        button:hover { background: #00ffcc; color: #0a0e14; }
+        button#deleteBtn { border-color: #ff4444; color: #ff4444; }
+        button#deleteBtn:hover { background: #ff4444; color: white; }
+    </style>
+</head>
+<body>
+
+    <h2>QR ID DASHBOARD</h2>
+    <div id="reader"></div>
+    
+    <div id="stats">Present Count: <span id="countDisplay">0</span></div>
+
+    <button id="scanAgainBtn" style="display:none;">Scan Next</button>
+    <button id="downloadBtn">Export CSV</button>
+    <button id="deleteBtn">Delete All</button>
+
+    <h3>History (Present)</h3>
+    <table>
+        <thead><tr><th>No.</th><th>ID</th><th>Time</th></tr></thead>
+        <tbody id="historyBody"></tbody>
+    </table>
+
+    <h3>Absent List</h3>
+    <table>
+        <thead><tr><th>ID</th><th>Name</th></tr></thead>
+        <tbody id="absentBody"></tbody>
+    </table>
+
+    <script>
+        const masterList = [
+            { id: "1", name: "Ginalyn V. Garcia" },
+            { id: "2", name: "Ashlie Luis Hurtada" },
+            { id: "3", name: "Shiela Mae D. Garcia" },
+            { id: "4", name: "Justine Lee Balingue" },
+            { id: "5", name: "Noel Visperas"}
+            
+        ];
+
+        let scanHistory = JSON.parse(localStorage.getItem("myScans")) || [];
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+
+        function updateAttendance() {
+            const today = new Date().toLocaleDateString();
+            const tbody = document.getElementById("historyBody");
+            const absentBody = document.getElementById("absentBody");
+            const countDisplay = document.getElementById("countDisplay");
+            
+            tbody.innerHTML = "";
+            absentBody.innerHTML = "";
+
+            const todayScans = scanHistory.filter(item => item.date === today);
+            const scannedIDs = todayScans.map(item => item.id);
+
+            todayScans.forEach((item, index) => {
+                tbody.innerHTML += `<tr><td>${index + 1}</td><td>${item.id}</td><td>${item.time}</td></tr>`;
+            });
+
+            // Deadline: 8:25 AM
+            const now = new Date();
+            const isPastDeadline = (now.getHours() > 1) |(now.getHours() === 1 && now.getMinutes() >= 25);
+
+            masterList.forEach(student => {
+                if (!scannedIDs.includes(student.id)) {
+                    let style = isPastDeadline ? 'style="background-color: #ff4444; color: white;"' : '';
+                    absentBody.innerHTML += `<tr ${style}><td>${student.id}</td><td>${student.name}</td></tr>`;
+                }
+            });
+
+            countDisplay.innerText = todayScans.length + " / " + masterList.length;
+        }
+
+        function onScanSuccess(decodedText) {
+            const today = new Date().toLocaleDateString();
+            if (scanHistory.some(i => i.id === decodedText && i.date === today)) {
+                alert("Already scanned today!");
+            } else {
+                scanHistory.push({ id: decodedText, time: new Date().toLocaleTimeString(), date: today });
+                localStorage.setItem("myScans", JSON.stringify(scanHistory));
+                updateAttendance();
+            }
+            html5QrcodeScanner.pause(true);
+            document.getElementById("scanAgainBtn").style.display = "inline-block";
+        }
+
+        html5QrcodeScanner.render(onScanSuccess);
+
+        document.getElementById("scanAgainBtn").addEventListener("click", () => {
+            html5QrcodeScanner.resume();
+            document.getElementById("scanAgainBtn").style.display = "none";
+        });
+
+        document.getElementById("deleteBtn").addEventListener("click", () => {
+            if (confirm("Delete all records?")) {
+                scanHistory = [];
+                localStorage.removeItem("myScans");
+                updateAttendance();
+            }
+        });
+
+        document.getElementById("downloadBtn").addEventListener("click", () => {
+            let csv = "ID,Time,Date\n";
+            scanHistory.forEach(item => csv += `${item.id},${item.time},${item.date}\n`);
+            let a = document.createElement("a");
+            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+            a.download = "Attendance.csv";
+            a.click();
+        });
+
+        updateAttendance();
+    </script>
+</body>
+</html>
